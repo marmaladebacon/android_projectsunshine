@@ -1,7 +1,11 @@
 package com.codingprojects.mko.sunshine.app;
 
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 import android.os.Bundle;
 import android.text.format.Time;
@@ -12,8 +16,10 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -38,6 +44,12 @@ public class ForecastFragment extends Fragment {
     }
 
     @Override
+    public void onStart() {
+        super.onStart();
+        updateWeather();
+    }
+
+    @Override
     public void onCreate(Bundle savedInstanceState){
         super.onCreate(savedInstanceState);
         //Add this line in order for this fragment to handle menu events
@@ -53,6 +65,7 @@ public class ForecastFragment extends Fragment {
                              Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_main, container, false);
 
+        /* Dummy data
         ArrayList<String> weekForecast = new ArrayList<>();
         weekForecast.add("Today Sunny 88/63");
         weekForecast.add("Today Sunny 48/23");
@@ -65,26 +78,49 @@ public class ForecastFragment extends Fragment {
         //R.layout.list_item_forecast is the ID of the list item layout
         //R.id.list_item_forecast_textview is the ID of the textview to populate.
         //forecast data
+        */
 
 
-
-
-        forecastArrayAdapter = new ArrayAdapter<String>(getActivity(), R.layout.list_item_forecast, R.id.list_item_forecast_textview, weekForecast);
+        forecastArrayAdapter = new ArrayAdapter<String>(getActivity(), R.layout.list_item_forecast, R.id.list_item_forecast_textview, new ArrayList<String>());
         ListView listView = (ListView) rootView.findViewById(R.id.listview_forecast);
         listView.setAdapter(forecastArrayAdapter);
+
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+
+                Context context = getActivity().getApplicationContext();
+                String test = (String)parent.getItemAtPosition(position);
+                CharSequence text = "Hello toast! "+test;
+                int duration = Toast.LENGTH_SHORT;
+
+                Toast toast = Toast.makeText(context, text, duration);
+                toast.show();
+
+                Intent detailIntent = new Intent(getActivity().getApplicationContext(), DetailActivity.class).putExtra(Intent.EXTRA_TEXT, test);
+                startActivity( detailIntent);
+            }
+        });
         return rootView;
+    }
+
+    void updateWeather() {
+        FetchForecastTask f = new FetchForecastTask();
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(getActivity());
+        String postcode = sharedPref.getString(getString(R.string.pref_location_key), getString(R.string.pref_location_default));
+        f.execute(postcode);
+        Log.d("Test", "Started fetch for " + postcode);
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
+        Log.i(this.getClass().getSimpleName(), "Touched :"+ id + "  vs "+ R.id.action_settings);
         if (id == R.id.action_refresh) {
-            FetchForecastTask f = new FetchForecastTask();
-            f.execute("94043");
-            Log.d("Test", "Started fetch");
-
+            updateWeather();
             return true;
         }
+
         return super.onOptionsItemSelected(item);
     }
 
@@ -246,6 +282,10 @@ public class ForecastFragment extends Fragment {
             dayTime = new Time();
 
             String[] resultStrs = new String[numDays];
+
+            SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(getActivity());
+            String tempunitsType = sharedPref.getString(getString(R.string.pref_temperature_units_key), getString(R.string.pref_temperature_units_default));
+
             for(int i = 0; i < weatherArray.length(); i++) {
                 // For now, using the format "Day, description, hi/low"
                 String day;
@@ -272,7 +312,10 @@ public class ForecastFragment extends Fragment {
                 JSONObject temperatureObject = dayForecast.getJSONObject(OWM_TEMPERATURE);
                 double high = temperatureObject.getDouble(OWM_MAX);
                 double low = temperatureObject.getDouble(OWM_MIN);
-
+                if(tempunitsType.equals("imperial")){
+                    high = ConvertToImperial(high);
+                    low = ConvertToImperial(low);
+                }
                 highAndLow = formatHighLows(high, low);
                 resultStrs[i] = day + " - " + description + " - " + highAndLow;
             }
@@ -282,6 +325,10 @@ public class ForecastFragment extends Fragment {
             }
             return resultStrs;
 
+        }
+
+        double ConvertToImperial(double val){
+            return  (val * 9/5 +32);
         }
     }
 }
